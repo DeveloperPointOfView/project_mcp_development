@@ -5,10 +5,6 @@ import os
 load_dotenv()
 print(os.getenv("OPENAI_API_KEY")) # This is a test to see if the API key is loaded
 
-
-
-
-
 async def main():
     print("Hello from mcp-crash-course!")
 
