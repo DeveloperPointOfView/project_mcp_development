@@ -1,9 +1,21 @@
 import asyncio
 from dotenv import load_dotenv
-import os
+from mcp import ClientSession
+from mcp.client.stdio import stdio_client, StdioServerParameters
+from langchain_openai import ChatOpenAI
+from langchain_mcp_adapters.tools import load_mcp_tools
+from langgraph.prebuilt import create_react_agent
 
 load_dotenv()
-print(os.getenv("OPENAI_API_KEY")) # This is a test to see if the API key is loaded
+
+load_dotenv()
+
+llm = ChatOpenAI()
+
+stdio_server_params = StdioServerParameters(
+    command="python",
+    args=["/Users/tripti/Documents/GithubProjects/mcp-servers/mcp-crash-course/servers/math_server.py"]
+)
 
 async def main():
     print("Hello from mcp-crash-course!")
