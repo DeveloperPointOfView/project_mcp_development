@@ -1,50 +1,97 @@
-import asyncio
-import os
+"""
+Mini Pokédex Lite - FastMCP 2.0 Resources Demo (Async Version)
+
+This demo teaches MCP resources by providing a simple Pokédex interface.
+It demonstrates:
+- Static resource listing with @mcp.resource (async)
+- Dynamic resource templates with URI parameters (async)
+- External API integration with PokeAPI (async httpx)
+- Error handling and JSON responses
+- Proper async/await patterns
+
+Usage:
+    python main.py
+
+MCP Resources provided:
+- poke://pokemon/1 (Bulbasaur)
+- poke://pokemon/4 (Charmander) 
+- poke://pokemon/7 (Squirtle)
+- poke://pokemon/{id} (Any Pokémon by ID)
+"""
+
 import sys
-from dotenv import load_dotenv
+import httpx
+from fastmcp import FastMCP
+from fastmcp.exceptions import ResourceError
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-from langchain_core.messages import HumanMessage
-from langchain_openai import ChatOpenAI
-from langchain_mcp_adapters.tools import load_mcp_tools
-from langgraph.prebuilt import create_react_agent
+app = FastMCP(name="mini-pokedex-lite")
 
-load_dotenv()
 
-# Initialize LLM (expects OPENAI_API_KEY in env)
-llm = ChatOpenAI()
+def log(msg: str):
+    print(msg, file=sys.stderr, flush=True)  # <- STDERR only
 
-# Use the current interpreter to run the MCP server in the same venv
-stdio_server_params = StdioServerParameters(
-    command=sys.executable,  # or "python3"
-    args=[
-        "/Users/tripti/Documents/GithubProjects/mcp-servers/mcp-crash-course/servers/math_server.py"
-    ],
-    env=os.environ.copy(),
-)
 
-async def main():
-    async with stdio_client(stdio_server_params) as (read, write):
-        async with ClientSession(read_stream=read, write_stream=write) as session:
-            await session.initialize()
-            print("✅ Connected to the MCP server.")
+STARTERS = {"1": "bulbasaur", "4": "charmander", "7": "squirtle"}
 
-            # Load MCP tools from the session
-            mcp_tools = await load_mcp_tools(session)
-            print(f"🔧 Loaded {len(mcp_tools)} tool(s): {[t.name for t in mcp_tools]}")
 
-            # (Optional) Build an agent that can use those tools
-            agent = create_react_agent(llm, tools=mcp_tools)
+@app.resource("poke://starters")
+async def list_starters() -> dict:
+    return {
+        "starters": [
+            {"id": pid, "name": name.capitalize(), "uri": f"poke://pokemon/{pid}"}
+            for pid, name in STARTERS.items()
+        ],
+        "total": len(STARTERS),
+    }
 
-            # Quick smoke test: show the agent’s available tools
-            # (In real use, you'd call agent with a task prompt.)
-            for t in mcp_tools:
-                print(f"- {t.name}: {t.description}")
 
-            # Example (uncomment to run a single call):
-            result = await agent.ainvoke({"messages": [HumanMessage(content="what is 55*68*56+4567?")]})
-            print(result["messages"][-1].content)
+@app.resource("poke://pokemon/{pokemon_id_or_name}")
+async def get_pokemon(pokemon_id_or_name: str) -> dict:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.get(f"https://pokeapi.co/api/v2/pokemon/{pokemon_id_or_name}")
+        if r.status_code == 404:
+            raise ResourceError(f"Pokémon '{pokemon_id_or_name}' not found")
+        r.raise_for_status()
+        data = r.json()
+        return {
+            "id": data["id"],
+            "name": data["name"].capitalize(),
+            "height": data["height"] / 10,
+            "weight": data["weight"] / 10,
+            "types": [t["type"]["name"] for t in data["types"]],
+            "abilities": [a["ability"]["name"] for a in data["abilities"]],
+            "base_stats": {s["stat"]["name"]: s["base_stat"] for s in data["stats"]},
+            "sprite": data["sprites"]["front_default"],
+            "api_url": f"https://pokeapi.co/api/v2/pokemon/{pokemon_id_or_name}",
+        }
+
+
+@app.resource("poke://types/{type_name}")
+async def get_pokemon_by_type(type_name: str) -> dict:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.get(f"https://pokeapi.co/api/v2/type/{type_name}")
+        if r.status_code == 404:
+            raise ResourceError(f"Type '{type_name}' not found")
+        r.raise_for_status()
+        data = r.json()
+        pokemon_list = data["pokemon"][:10]
+        return {
+            "type": type_name.capitalize(),
+            "type_id": data["id"],
+            "pokemon_count": len(data["pokemon"]),
+            "showing": len(pokemon_list),
+            "pokemon": [
+                {
+                    "name": p["pokemon"]["name"].capitalize(),
+                    "uri": f"poke://pokemon/{p['pokemon']['name']}",
+                }
+                for p in pokemon_list
+            ],
+        }
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Human-readable logs go to STDERR:
+    log("🔥 Pokédex STDIO server starting…")
+    log("🎯 Try: poke://starters, poke://pokemon/1, poke://types/fire")
+    app.run()  # STDIO transport
