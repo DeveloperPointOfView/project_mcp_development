@@ -24,6 +24,7 @@ stdio_server_params = StdioServerParameters(
     env=os.environ.copy(),
 )
 
+
 async def main():
     async with stdio_client(stdio_server_params) as (read, write):
         async with ClientSession(read_stream=read, write_stream=write) as session:
@@ -43,8 +44,11 @@ async def main():
                 print(f"- {t.name}: {t.description}")
 
             # Example (uncomment to run a single call):
-            result = await agent.ainvoke({"messages": [HumanMessage(content="what is 55*68*56+4567?")]})
+            result = await agent.ainvoke(
+                {"messages": [HumanMessage(content="what is 55*68*56+4567?")]}
+            )
             print(result["messages"][-1].content)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
