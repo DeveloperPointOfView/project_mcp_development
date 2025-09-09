@@ -94,4 +94,7 @@ if __name__ == "__main__":
     # Human-readable logs go to STDERR:
     log("🔥 Pokédex STDIO server starting…")
     log("🎯 Try: poke://starters, poke://pokemon/1, poke://types/fire")
-    app.run()  # STDIO transport
+    app.run() 
+    #app.run(transport="stdio")
+    #app.run(transport="http") 
+    #app.run(transport="sse")   # STDIO transport
